@@ -11,6 +11,8 @@
 int ldr = 32;
 #define tipodht DHT22
 unsigned long marcoZero = 0;
+bool piscando;
+bool estadoLed;
 
 DHT sensor(pindht, tipodht);
 // Timezone brasil;
@@ -36,6 +38,7 @@ void setup()
   Serial.setTimeout(5000); // espera eu digitar
   conexaoWifi();
   sensor.begin();
+  pinMode(LEDvm, OUTPUT);
 
   // Serial.println("Sincronizando relógio via NTP...");
   // waitForSync();                           // Aguarda obter o horário da internet
@@ -60,36 +63,47 @@ void loop()
     conectaMqtt();
   }
 
-  //==============================================LDR e DHT=========================================================
+  if (piscando)
+  {
+    unsigned long marcoAtual1 = millis();
+    if (marcoAtual1 - marcoZero >= 500)
+    {
+      estadoLed = !estadoLed;
+      digitalWrite(LEDvm, estadoLed);
+      marcoZero = marcoAtual1;
+    }
 
-  // int valorLdr;
+    //==============================================LDR e DHT=========================================================
 
-  // unsigned long marcoAtual = millis();
+    // int valorLdr;
 
-  // if (marcoAtual - marcoZero >= 3000)
-  // {
-  //   valorLdr = analogRead(ldr);
+    // unsigned long marcoAtual = millis();
 
-  //   float tempC = sensor.readTemperature();
-  //   float umidade = sensor.readHumidity();
+    // if (marcoAtual - marcoZero >= 3000)
+    // {
+    //   valorLdr = analogRead(ldr);
 
-  //   JsonDocument pasta;
-  //   pasta["disp"] = "Esp-Lara";
-  //   pasta["temperatura"] = tempC;
-  //   pasta["umidade"] = umidade;
-  //   pasta["luz"] = valorLdr;
+    //   float tempC = sensor.readTemperature();
+    //   float umidade = sensor.readHumidity();
 
-  //   String stringJson;
-  //   serializeJson(pasta, stringJson);
+    //   JsonDocument pasta;
+    //   pasta["disp"] = "Esp-Lara";
+    //   pasta["temperatura"] = tempC;
+    //   pasta["umidade"] = umidade;
+    //   pasta["luz"] = valorLdr;
 
-  //   client.publish(mqtt_topic_pub, stringJson.c_str()); // publica conteúdo presente na stringjson
+    //   String stringJson;
+    //   serializeJson(pasta, stringJson);
 
-  //   Serial.print("Enviado: ");
-  //   Serial.println(stringJson);
+    //   client.publish(mqtt_topic_pub, stringJson.c_str()); // publica conteúdo presente na stringjson
 
-  //   marcoZero = marcoAtual;
-  // }
-  // //}
+    //   Serial.print("Enviado: ");
+    //   Serial.println(stringJson);
+
+    //   marcoZero = marcoAtual;
+    // }
+    // //}
+  }
 }
 
 //=============================================FUNCOES=========================================================
@@ -128,7 +142,7 @@ void retornoMqtt(char *topic, byte *payload, unsigned int length)
   String msgRecebida = "";
   for (int i = 0; i < length; i++)
   {
-    msgRecebida += (char)payload[i]; // corpo da mensagem não vem no padrão string, mas sim como padrao de caracteres, entao esou salvando em string
+    msgRecebida += (char)payload[i]; // corpo da mensagem não vem no padrão string, mas sim como padrao de caracteres, entao estou salvando em string
   }
 
   Serial.println(msgRecebida);
@@ -144,6 +158,30 @@ void retornoMqtt(char *topic, byte *payload, unsigned int length)
     return; // se der erro ele executa esse if, mostra o erro e sai da função
   }
 
+  const char *msg = pasta["msg"];
+
+  if (msg != nullptr)
+  {
+    String comando = String(msg);
+
+    if (comando.indexOf("Piscar") != -1)
+    {
+      piscando = true;
+    }
+    else if (comando.indexOf("Ligar") != -1)
+    {
+      piscando = false; // Para de piscar para manter aceso fixo
+      estadoLed = HIGH;
+      digitalWrite(LEDvm, HIGH);
+    }
+    else if (comando.indexOf("Desligar") != -1)
+    {
+      piscando = false; // Para de piscar para manter apagado
+      estadoLed = LOW;
+      digitalWrite(LEDvm, LOW);
+    }
+  }
+
   // Acessar campos do JSON--------------------------------------------------------------------------------------
   // const char *dispositivo = pasta["disp"];
   // const char *msg = pasta["msg"];
@@ -153,19 +191,4 @@ void retornoMqtt(char *topic, byte *payload, unsigned int length)
   // Serial.print("Mensagem: ");
   // Serial.println(msg);
   // Serial.print("-------------------------");
-
-  if (Serial.available() > 0)
-  {
-    String textoDigitado = Serial.readStringUntil('\n'); // lê string até o enter ser apertado
-    textoDigitado.trim();
-
-    if (textoDigitado.indexOf("Desligar") != -1)
-    {
-      digitalWrite(LEDvm, LOW);
-    }
-    else if (textoDigitado.indexOf("Ligar") != -1)
-    {
-      digitalWrite(LEDvm, HIGH);
-    }
-  }
 }
